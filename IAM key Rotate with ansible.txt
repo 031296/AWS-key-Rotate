@@ -1,0 +1,50 @@
+- name: Manage AWS IAM Access Keys
+  hosts: localhost
+  gather_facts: false
+  vars:
+    aws_cli_path: "/usr/local/bin/aws"  # Specify the path to the AWS CLI executable
+
+  tasks:
+    - name: Check if AWS CLI is installed
+      command: "{{ aws_cli_path }} --version"
+      ignore_errors: true
+      register: aws_cli_check
+
+    - name: Install AWS CLI if not installed
+      block:
+        - fail:
+            msg: "AWS CLI is required. Please install it from https://aws.amazon.com/cli/"
+          when: aws_cli_check.rc != 0
+
+    - name: Perform AWS IAM Key Operations
+      block:
+        - name: Display playbook usage
+          debug:
+            msg: |
+              Usage: ansible-playbook -e "action=<action> name=<user_name> key=<access_key_id>" playbook.yml
+                Actions:
+
+                  - rotate
+
+        - name: Perform the specified action
+          include_tasks: "{{ item }}"
+          with_items: "{{ some_list | default([]) }}"
+          when: "item.split('/')[-1].split('.')[0] == action"
+          vars:
+            aws_cli_path: "{{ aws_cli_path }}"
+      vars:
+        aws_cli_path: "{{ aws_cli_path }}"
+Rotate:
+
+- name: Rotate access keys
+  include_tasks: actions/expire.yml
+  vars:
+    name: "{{ name }}"
+    key: "{{ key }}"
+
+- include_tasks: actions/create.yml
+  vars:
+    name: "{{ name }}"
+
+
+
