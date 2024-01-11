@@ -1,50 +1,43 @@
-- name: Manage AWS IAM Access Keys
+- name: Rotate IAM User Access Keys
   hosts: localhost
   gather_facts: false
-  vars:
-    aws_cli_path: "/usr/local/bin/aws"  # Specify the path to the AWS CLI executable
+
+  vars_files:
+    - variables.yaml
 
   tasks:
     - name: Check if AWS CLI is installed
-      command: "{{ aws_cli_path }} --version"
-      ignore_errors: true
+      command: "aws --version"
       register: aws_cli_check
+      ignore_errors: true
 
-    - name: Install AWS CLI if not installed
-      block:
-        - fail:
-            msg: "AWS CLI is required. Please install it from https://aws.amazon.com/cli/"
-          when: aws_cli_check.rc != 0
+    - name: Rotate IAM user's access keys
+      command: "aws iam create-access-key --user-name {{ iam_user_name }} --output json"
+      register: new_key
+      when: aws_cli_check.rc == 0
 
-    - name: Perform AWS IAM Key Operations
-      block:
-        - name: Display playbook usage
-          debug:
-            msg: |
-              Usage: ansible-playbook -e "action=<action> name=<user_name> key=<access_key_id>" playbook.yml
-                Actions:
+    - name: Get existing access keys
+      command: "aws iam list-access-keys --user-name {{ iam_user_name }} --output json"
+      register: access_keys
+      when: aws_cli_check.rc == 0
 
-                  - rotate
+    - name: Debug information for access keys
+      debug:
+        var: access_keys.stdout_lines
+      when: aws_cli_check.rc == 0
 
-        - name: Perform the specified action
-          include_tasks: "{{ item }}"
-          with_items: "{{ some_list | default([]) }}"
-          when: "item.split('/')[-1].split('.')[0] == action"
-          vars:
-            aws_cli_path: "{{ aws_cli_path }}"
-      vars:
-        aws_cli_path: "{{ aws_cli_path }}"
-Rotate:
+    - name: Deactivate old access key
+      command: "aws iam update-access-key --user-name {{ iam_user_name }} --access-key-id {{ access_keys.stdout.AccessKeyMetadata[0].AccessKeyId }} --status Inactive"
+      when: aws_cli_check.rc == 0 and access_keys.stdout.AccessKeyMetadata | length >= max_access_keys
 
-- name: Rotate access keys
-  include_tasks: actions/expire.yml
-  vars:
-    name: "{{ name }}"
-    key: "{{ key }}"
+    - name: Configure AWS CLI with new access key
+      command: "aws configure set aws_access_key_id '{{ new_key.stdout.AccessKey.AccessKeyId }}'"
+      when: aws_cli_check.rc == 0
 
-- include_tasks: actions/create.yml
-  vars:
-    name: "{{ name }}"
+    - name: Configure AWS CLI (contd.) with new secret key
+      command: "aws configure set aws_secret_access_key '{{ new_key.stdout.AccessKey.SecretAccessKey }}'"
+      when: aws_cli_check.rc == 0
 
+ 
 
 
