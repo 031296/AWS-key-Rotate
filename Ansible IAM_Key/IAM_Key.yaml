@@ -3,7 +3,7 @@
   gather_facts: false
 
   vars_files:
-    - variables.yaml
+    - variable.yml
 
   tasks:
     - name: Authenticate with AWS
